@@ -183,19 +183,21 @@ export default function LeftPanel({
       const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
       const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-      const view = new window.gapi.picker.DocsView(
-        window.gapi.picker.ViewId.PDFS,
-      );
+      window.gapi.load("picker", () => {
+        const view = new window.google.picker.DocsView(
+          window.google.picker.ViewId.PDFS,
+        );
 
-      const picker = new window.gapi.picker.PickerBuilder()
-        .setDeveloperKey(apiKey || "")
-        .setAppId(clientId || "")
-        .setOAuthToken(accessToken)
-        .addView(view)
-        .setCallback((data: any) => pickerCallback(data, accessToken))
-        .build();
+        const picker = new window.google.picker.PickerBuilder()
+          .setDeveloperKey(apiKey || "")
+          .setAppId(clientId || "")
+          .setOAuthToken(accessToken)
+          .addView(view)
+          .setCallback((data: any) => pickerCallback(data, accessToken))
+          .build();
 
-      picker.setVisible(true);
+        picker.setVisible(true);
+      });
     } catch (err: any) {
       alert(`Picker creation error: ${err.message || err}`);
     }
@@ -203,12 +205,12 @@ export default function LeftPanel({
 
   const pickerCallback = async (data: any, accessToken: string) => {
     if (
-      data[window.gapi.picker.Response.ACTION] ===
-      window.gapi.picker.Action.PICKED
+      data[window.google.picker.Response.ACTION] ===
+      window.google.picker.Action.PICKED
     ) {
-      const doc = data[window.gapi.picker.Response.DOCUMENTS][0];
-      const fileId = doc[window.gapi.picker.Document.ID];
-      const fileName = doc[window.gapi.picker.Document.NAME];
+      const doc = data[window.google.picker.Response.DOCUMENTS][0];
+      const fileId = doc[window.google.picker.Document.ID];
+      const fileName = doc[window.google.picker.Document.NAME];
 
       setUploadState({
         status: "uploading",
