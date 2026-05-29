@@ -193,6 +193,7 @@ export default function LeftPanel({
           .setAppId(clientId || "")
           .setOAuthToken(accessToken)
           .addView(view)
+          .setOrigin(window.location.protocol + '//' + window.location.host)
           .setCallback((data: any) => pickerCallback(data, accessToken))
           .build();
 
