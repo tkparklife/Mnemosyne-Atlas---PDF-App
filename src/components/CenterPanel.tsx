@@ -353,24 +353,6 @@ interface CenterPanelProps {
   searchQuery?: string;
 }
 
-export function PdfViewer({ fileUrl }: { fileUrl: string }) {
-  if (!fileUrl) return <div>Please select a PDF from the Library</div>;
-
-  return (
-    <div className="w-full h-full min-h-[600px]">
-      <object
-        data={fileUrl}
-        type="application/pdf"
-        className="w-full h-full pt-1"
-      >
-        <p>
-          Your browser does not support PDFs.{" "}
-          <a href={fileUrl}>Download the PDF</a>.
-        </p>
-      </object>
-    </div>
-  );
-}
 
 export default function CenterPanel({
   document,
@@ -394,6 +376,46 @@ export default function CenterPanel({
   );
   const [colorKey, setColorKey] = useState("yellow");
   const [tooltipPage, setTooltipPage] = useState<number>(1);
+
+  const { pdfjs, error: pdfJsError } = usePdfJs();
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+
+  useEffect(() => {
+    if (!document || document.fileType !== "pdf" || !document.fileData || !pdfjs) {
+      setPdfDoc(null);
+      return;
+    }
+
+    let url = document.fileData;
+    if (!url.startsWith('blob:') && !url.startsWith('http') && !url.startsWith('data:')) {
+      try {
+        let base64Clean = url.includes(',') ? url.split(',')[1] : url;
+        base64Clean = base64Clean.replace(/[^A-Za-z0-9+/=]/g, '');
+        while (base64Clean.length % 4 !== 0) {
+          base64Clean += '=';
+        }
+        const byteString = atob(base64Clean);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+          ia[i] = byteString.charCodeAt(i);
+        }
+        const blob = new Blob([ia], { type: 'application/pdf' });
+        url = URL.createObjectURL(blob);
+      } catch (e) {
+        console.warn("Failed to decode base64 for pdfjs", e);
+        url = `data:application/pdf;base64,${url.replace(/^data:.*,/, '')}`;
+      }
+    }
+
+    const task = pdfjs.getDocument(url);
+    task.promise.then((doc: any) => {
+      setPdfDoc(doc);
+    }).catch((err: any) => {
+      console.error("Failed to load PDF doc", err);
+      // fallback just in case
+    });
+  }, [document?.id, document?.fileData, pdfjs]);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -650,9 +672,14 @@ export default function CenterPanel({
                 </div>
 
                 {/* Core Visual Page Area with Text Decoupling */}
-                <div className="flex-1 relative min-h-[600px] mb-4 overflow-hidden rounded-lg bg-[#E5E7EB] border border-slate-200 w-full max-w-full box-border shadow-inner">
+                <div className="flex-1 relative min-h-[600px] mb-4 overflow-hidden rounded-lg bg-[#E5E7EB] border border-slate-200 w-full max-w-full box-border shadow-inner flex flex-col justify-center items-center">
                   {document.fileData && document.fileType === "pdf" ? (
-                    <PdfViewer fileUrl={document.fileData} />
+                    <VisualPdfPage
+                      pdfDoc={pdfDoc}
+                      pageNumber={pg.pageNumber}
+                      zoomLevel={zoomLevel}
+                      searchQuery={searchQuery}
+                    />
                   ) : document.fileData && document.fileType === "image" ? (
                     <div className="relative w-full h-full min-h-[600px] flex items-center justify-center bg-slate-100 p-2 box-border">
                       <img

@@ -295,7 +295,7 @@ async function startServer() {
       if (isPdfFile) {
         try {
           console.log(`PDF Document detected ('${title}'). Starting high-accuracy direct pdf-parse extraction of all pages...`);
-          const base64Clean = fileData.replace(/^data:.*;base64,/, "");
+          const base64Clean = fileData.includes(',') ? fileData.split(',')[1] : fileData;
 
           const buffer = Buffer.from(base64Clean, 'base64');
           
@@ -318,7 +318,7 @@ async function startServer() {
         try {
           console.log(`Instructing Gemini to extract text via OCR. Target file mimeType: ${mimeType || 'image/png'}`);
           
-          const base64Clean = fileData.replace(/^data:.*;base64,/, "");
+          const base64Clean = fileData.includes(',') ? fileData.split(',')[1] : fileData;
 
           const promptText = `
             You are a high-performance OCR, document processing, and philosophical knowledge extraction assistant.
@@ -390,7 +390,7 @@ async function startServer() {
       res.status(201).json(newDoc);
     } catch (err: any) {
       console.error("Critical upload error:", err);
-      res.status(500).json({ error: "Server failed to process file upload", details: err?.message });
+      res.status(500).json({ error: err?.message || "Server failed to process file upload", details: err?.message });
     }
   });
 
@@ -399,7 +399,7 @@ async function startServer() {
     // Attempt to salvage any readable text if base64 contains standard ASCII or text
     let recoveredText = "";
     try {
-      const base64Clean = fileData.replace(/^data:.*;base64,/, "");
+      const base64Clean = fileData.includes(',') ? fileData.split(',')[1] : fileData;
       const decoded = Buffer.from(base64Clean, 'base64').toString('utf-8');
       // If indeed utf8 text
       if (/^[a-zA-Z0-9\s\.,;:\(\)\/&\-\n_"'\?!]*$/.test(decoded.substring(0, 100))) {
