@@ -205,10 +205,13 @@ export default function LeftPanel({
   };
 
   const pickerCallback = async (data: any, accessToken: string) => {
-    if (data.action === window.google.picker.Action.PICKED) {
-      const doc = data.docs[0];
-      const fileId = doc.id;
-      const fileName = doc.name;
+    try {
+      if (data.action !== window.google.picker.Action.PICKED) {
+        return;
+      }
+
+      const fileId = data.docs[0].id;
+      const fileName = data.docs[0].name || "Google_Drive_Import.pdf";
 
       setUploadState({
         status: "uploading",
@@ -216,45 +219,47 @@ export default function LeftPanel({
         step: "Downloading from Google Drive...",
       });
 
-      try {
-        const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
           },
-        );
-        if (!res.ok)
-          throw new Error("Failed to download file from Google Drive");
+        },
+      );
 
-        const rawBlob = await res.blob();
-        const pdfBlob = new Blob([rawBlob], { type: 'application/pdf' });
-        const blobUrl = URL.createObjectURL(pdfBlob);
-
-        // Pass it directly to the local viewer as an object URL
-        const driveDoc: PDFDocument = {
-          id: fileId,
-          title: fileName,
-          fileType: "pdf",
-          fileData: blobUrl,
-          uploadDate: new Date().toISOString(),
-          totalPages: 1,
-          // We supply a minimal page object so CenterPanel doesn't crash
-          pages: [{ pageNumber: 1, rawText: "" }],
-          summary: "Imported locally from Google Drive.",
-          entities: [],
-        };
-
-        onUploadComplete(driveDoc);
-        setUploadState({ status: "idle" });
-      } catch (err: any) {
-        console.error("Picker error:", err);
-        setUploadState({
-          status: "error",
-          error: err.message || "Google Drive file fetch failed.",
-        });
+      if (!res.ok) {
+        throw new Error(`Google API responded with ${res.status}: ${res.statusText}`);
       }
+
+      const rawBlob = await res.blob();
+      const securePdfBlob = new Blob([rawBlob], { type: "application/pdf" });
+      const localUrl = URL.createObjectURL(securePdfBlob);
+
+      // Pass it directly to the local viewer as an object URL
+      const driveDoc: PDFDocument = {
+        id: fileId,
+        title: fileName,
+        fileType: "pdf",
+        fileData: localUrl,
+        uploadDate: new Date().toISOString(),
+        totalPages: 1,
+        // We supply a minimal page object so CenterPanel doesn't crash
+        pages: [{ pageNumber: 1, rawText: "" }],
+        summary: "Imported locally from Google Drive.",
+        entities: [],
+      };
+
+      onUploadComplete(driveDoc);
+      setUploadState({ status: "idle" });
+    } catch (err: any) {
+      console.error("Picker error:", err);
+      alert(`Google Drive Fetch Error: ${err.message || err}`);
+      setUploadState({
+        status: "error",
+        error: err.message || "Google Drive file fetch failed.",
+      });
     }
   };
 
