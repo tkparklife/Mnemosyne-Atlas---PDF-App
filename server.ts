@@ -296,11 +296,6 @@ async function startServer() {
         try {
           console.log(`PDF Document detected ('${title}'). Starting high-accuracy direct pdf-parse extraction of all pages...`);
           const base64Clean = fileData.replace(/^data:.*;base64,/, "");
-          
-          if (!/^[A-Za-z0-9+/=\s]+$/.test(base64Clean.substring(0, 100)) && base64Clean.length > 0) {
-            console.error("Invalid base64 string prefix before decoding detected:", base64Clean.substring(0, 50));
-            throw new Error("Pipeline Ingestion Failed. The string did not match the expected pattern. (Invalid Base64 format)");
-          }
 
           const buffer = Buffer.from(base64Clean, 'base64');
           
