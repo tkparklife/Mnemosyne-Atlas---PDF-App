@@ -66,88 +66,139 @@ export default function LeftPanel({
   // Google Drive Integration State
   const [gapiLoaded, setGapiLoaded] = useState(false);
   const [gisLoaded, setGisLoaded] = useState(false);
-  const [tokenClient, setTokenClient] = useState<any>(null);
 
   useEffect(() => {
-    // Load GIS
-    const script1 = document.createElement("script");
-    script1.src = "https://accounts.google.com/gsi/client";
-    script1.async = true;
-    script1.defer = true;
-    script1.onload = () => {
-      try {
-        if (window.google?.accounts?.oauth2) {
-          const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-          if (clientId) {
-            const client = window.google.accounts.oauth2.initTokenClient({
-              client_id: clientId,
-              scope: "https://www.googleapis.com/auth/drive.readonly",
-              callback: (tokenResponse: any) => {
-                if (tokenResponse && tokenResponse.access_token) {
-                  createPicker(tokenResponse.access_token);
-                }
-              },
-            });
-            setTokenClient(client);
-            setGisLoaded(true);
-          } else {
-            console.warn(
-              "VITE_GOOGLE_CLIENT_ID is not set in environment variables. Google Drive import will be disabled.",
-            );
-          }
+    const loadScript = (
+      src: string,
+      isLoaded: () => boolean,
+    ): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        if (isLoaded()) {
+          resolve();
+          return;
         }
-      } catch (err) {
-        console.error("Error initializing Google Identity Services:", err);
-      }
-    };
-    script1.onerror = () =>
-      console.error("Failed to load Google Identity Services script.");
-    document.body.appendChild(script1);
 
-    // Load GAPI
-    const script2 = document.createElement("script");
-    script2.src = "https://apis.google.com/js/api.js";
-    script2.async = true;
-    script2.defer = true;
-    script2.onload = () => {
+        const existingScript = document.querySelector(
+          `script[src="${src}"]`,
+        ) as HTMLScriptElement;
+        if (existingScript) {
+          // If the script exists but isn't fully loaded (React Strict Mode double-render)
+          const check = setInterval(() => {
+            if (isLoaded()) {
+              clearInterval(check);
+              resolve();
+            }
+          }, 100);
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.body.appendChild(script);
+      });
+    };
+
+    const initGoogleApi = async () => {
       try {
-        window.gapi.load("picker", { callback: () => setGapiLoaded(true) });
-      } catch (err) {
-        console.error("Error loading GAPI picker:", err);
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+
+        if (!clientId || !apiKey) {
+          console.error(
+            `Missing Google Cloud credentials: ${!clientId ? "VITE_GOOGLE_CLIENT_ID is missing." : ""} ${!apiKey ? "VITE_GOOGLE_API_KEY is missing." : ""}`,
+          );
+        }
+
+        // Load both scripts explicitly
+        await Promise.all([
+          loadScript(
+            "https://apis.google.com/js/api.js",
+            () => !!window.gapi && !!window.gapi.load,
+          ),
+          loadScript(
+            "https://accounts.google.com/gsi/client",
+            () => !!window.google?.accounts?.oauth2,
+          ),
+        ]);
+
+        // Load the picker library inside GAPI
+        await new Promise<void>((resolve, reject) => {
+          try {
+            window.gapi.load("picker", {
+              callback: resolve,
+              onerror: () => reject(new Error("Failed to load picker API")),
+            });
+          } catch (e) {
+            reject(e);
+          }
+        });
+        setGapiLoaded(true);
+        setGisLoaded(true);
+      } catch (err: any) {
+        console.error("Google Integration Initialization Failed:", err);
       }
     };
-    script2.onerror = () => console.error("Failed to load GAPI script.");
-    document.body.appendChild(script2);
+
+    initGoogleApi();
   }, []);
 
   const handleDriveImport = () => {
-    if (!gapiLoaded || !gisLoaded || !tokenClient) {
+    if (!gapiLoaded || !gisLoaded) {
       alert(
-        "Google Drive API is still loading. Please try again in a few seconds.",
+        "Google Drive APIs are not fully loaded. Please wait a moment and try again.",
       );
       return;
     }
 
-    tokenClient.requestAccessToken();
+    try {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        alert("Client ID is missing. Check console for details.");
+        return;
+      }
+
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "https://www.googleapis.com/auth/drive.readonly",
+        callback: (tokenResponse: any) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            createPicker(tokenResponse.access_token);
+          } else if (tokenResponse?.error) {
+            alert(`Google OAuth Error: ${tokenResponse.error}`);
+          }
+        },
+      });
+      client.requestAccessToken();
+    } catch (err: any) {
+      alert(`Token Request Error: ${err.message || err}`);
+    }
   };
 
   const createPicker = (accessToken: string) => {
-    const view = new window.gapi.picker.DocsView(
-      window.gapi.picker.ViewId.DOCS,
-    );
-    view.setMimeTypes("application/pdf");
+    try {
+      const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-    let builder = new window.gapi.picker.PickerBuilder()
-      .addView(view)
-      .setOAuthToken(accessToken)
-      .setCallback((data: any) => pickerCallback(data, accessToken));
+      const view = new window.gapi.picker.DocsView(
+        window.gapi.picker.ViewId.PDFS,
+      );
 
-    if (import.meta.env.VITE_GOOGLE_API_KEY) {
-      builder = builder.setDeveloperKey(import.meta.env.VITE_GOOGLE_API_KEY);
+      const picker = new window.gapi.picker.PickerBuilder()
+        .setDeveloperKey(apiKey || "")
+        .setAppId(clientId || "")
+        .setOAuthToken(accessToken)
+        .addView(view)
+        .setCallback((data: any) => pickerCallback(data, accessToken))
+        .build();
+
+      picker.setVisible(true);
+    } catch (err: any) {
+      alert(`Picker creation error: ${err.message || err}`);
     }
-
-    const picker = builder.build();
-    picker.setVisible(true);
   };
 
   const pickerCallback = async (data: any, accessToken: string) => {
@@ -178,8 +229,24 @@ export default function LeftPanel({
           throw new Error("Failed to download file from Google Drive");
 
         const blob = await res.blob();
-        const file = new File([blob], fileName, { type: "application/pdf" });
-        await processUpload(file);
+        const blobUrl = URL.createObjectURL(blob);
+
+        // Pass it directly to the local viewer as an object URL
+        const driveDoc: PDFDocument = {
+          id: fileId,
+          title: fileName,
+          fileType: "pdf",
+          fileData: blobUrl,
+          uploadDate: new Date().toISOString(),
+          totalPages: 1,
+          // We supply a minimal page object so CenterPanel doesn't crash
+          pages: [{ pageNumber: 1, rawText: "" }],
+          summary: "Imported locally from Google Drive.",
+          entities: [],
+        };
+
+        onUploadComplete(driveDoc);
+        setUploadState({ status: "idle" });
       } catch (err: any) {
         console.error("Picker error:", err);
         setUploadState({
