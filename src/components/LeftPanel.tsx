@@ -235,31 +235,19 @@ export default function LeftPanel({
 
       const rawBlob = await res.blob();
       const securePdfBlob = new Blob([rawBlob], { type: "application/pdf" });
-      const localUrl = URL.createObjectURL(securePdfBlob);
-
-      // Pass it directly to the local viewer as an object URL
-      const driveDoc: PDFDocument = {
-        id: fileId,
-        title: fileName,
-        fileType: "pdf",
-        fileData: localUrl,
-        uploadDate: new Date().toISOString(),
-        totalPages: 1,
-        // We supply a minimal page object so CenterPanel doesn't crash
-        pages: [{ pageNumber: 1, rawText: "" }],
-        summary: "Imported locally from Google Drive.",
-        entities: [],
-      };
-
-      onUploadComplete(driveDoc);
-      setUploadState({ status: "idle" });
+      
+      // Pass the raw blob directly into the unified ingestion pipeline
+      await executePipelineIngestion(securePdfBlob, fileName, true, false, false);
+      
     } catch (err: any) {
       console.error("Picker error:", err);
-      alert(`Google Drive Fetch Error: ${err.message || err}`);
+      // alert(`Google Drive Fetch Error: ${err.message || err}`);
       setUploadState({
         status: "error",
         error: err.message || "Google Drive file fetch failed.",
       });
+      // Clear error slightly slowly
+      setTimeout(() => setUploadState({ status: "idle" }), 5000);
     }
   };
 
@@ -282,7 +270,97 @@ export default function LeftPanel({
     violet: "ring-violet-400 text-violet-800 border-violet-300",
   };
 
-  // Convert File to Base64 helper
+  // Unified ingestion pipeline supporting both File and Blob
+  const executePipelineIngestion = async (
+    rawFileOrBlob: File | Blob,
+    title: string,
+    isPdf: boolean,
+    isImage: boolean,
+    isText: boolean
+  ) => {
+    try {
+      const reader = new FileReader();
+
+      const fileLoadedPromise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (e) => reject(e);
+      });
+
+      // Data URL correctly formats the binary data into a string that Node.js Buffer.from can parse
+      reader.readAsDataURL(rawFileOrBlob);
+      const base64Data = await fileLoadedPromise;
+
+      // Stage steps for high fidelity feedback
+      const steps = [
+        "Sending document payload to knowledge indexer...",
+        "Calling server-side Gemini 3.5 OCR scanner...",
+        "Parsing rich structural layout & text segments...",
+        "Generating philosophical summaries & entity terms...",
+        "Compiling cross-document search vectors...",
+      ];
+
+      let stepIdx = 0;
+      const interval = setInterval(() => {
+        if (stepIdx < steps.length - 1) {
+          stepIdx++;
+          setUploadState((prev) => ({ ...prev, step: steps[stepIdx] }));
+        }
+      }, 1500);
+
+      const mimeType =
+        rawFileOrBlob.type ||
+        (isPdf ? "application/pdf" : isText ? "text/plain" : "image/png");
+      const sizeStr = (rawFileOrBlob.size / (1024 * 1024)).toFixed(2) + " MB";
+
+      const res = await fetch("/api/documents/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title,
+          fileData: base64Data, // sourceRawData sent exclusively to ingestion engine
+          mimeType,
+          fileSize: sizeStr,
+          fileType: isPdf ? "pdf" : isImage ? "image" : "text",
+          collectionIds: selectedCollectionId ? [selectedCollectionId] : [],
+        }),
+      });
+
+      clearInterval(interval);
+
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.details || errJson.error || "Uploader error");
+      }
+
+      const parsedDoc: PDFDocument = await res.json();
+
+      // Override the server's base64 representation with a pure local Blob URL
+      // This ensures the UI Viewer doesn't attempt to process a 5MB base64 string
+      parsedDoc.fileData = URL.createObjectURL(rawFileOrBlob);
+
+      setUploadState({
+        status: "success",
+        filename: title,
+      });
+
+      onUploadComplete(parsedDoc);
+
+      // Reset feedback status slowly
+      setTimeout(() => {
+        setUploadState({ status: "idle" });
+      }, 3000);
+    } catch (e: any) {
+      console.error("Upload failure:", e);
+      setUploadState({
+        status: "error",
+        error: e.message || "Unknown indexer ingestion exception",
+      });
+      setTimeout(() => {
+        setUploadState({ status: "idle" });
+      }, 5000);
+    }
+  };
+
   const processUpload = async (file: File) => {
     if (!file) return;
 
@@ -304,80 +382,8 @@ export default function LeftPanel({
       });
       return;
     }
-
-    try {
-      const reader = new FileReader();
-
-      const fileLoadedPromise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = (e) => reject(e);
-      });
-
-      reader.readAsDataURL(file);
-      const base64Data = await fileLoadedPromise;
-
-      // Stage steps for high fidelity feedback
-      const steps = [
-        "Sending document payload to knowledge indexer...",
-        "Calling server-side Gemini 3.5 OCR scanner...",
-        "Parsing rich structural layout & text segments...",
-        "Generating philosophical summaries & entity terms...",
-        "Compiling cross-document search vectors...",
-      ];
-
-      let stepIdx = 0;
-      const interval = setInterval(() => {
-        if (stepIdx < steps.length - 1) {
-          stepIdx++;
-          setUploadState((prev) => ({ ...prev, step: steps[stepIdx] }));
-        }
-      }, 1500);
-
-      const mimeType =
-        file.type ||
-        (isPdf ? "application/pdf" : isText ? "text/plain" : "image/png");
-      const sizeStr = (file.size / (1024 * 1024)).toFixed(2) + " MB";
-
-      const res = await fetch("/api/documents/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: file.name,
-          fileData: base64Data,
-          mimeType,
-          fileSize: sizeStr,
-          fileType: isPdf ? "pdf" : isImage ? "image" : "text",
-          collectionIds: selectedCollectionId ? [selectedCollectionId] : [],
-        }),
-      });
-
-      clearInterval(interval);
-
-      if (!res.ok) {
-        const errJson = await res.json();
-        throw new Error(errJson.details || errJson.error || "Uploader error");
-      }
-
-      const parsedDoc: PDFDocument = await res.json();
-
-      setUploadState({
-        status: "success",
-        filename: file.name,
-      });
-
-      onUploadComplete(parsedDoc);
-
-      // Reset feedback status slowly
-      setTimeout(() => {
-        setUploadState({ status: "idle" });
-      }, 3000);
-    } catch (e: any) {
-      console.error("Upload failure:", e);
-      setUploadState({
-        status: "error",
-        error: e.message || "Unknown indexer ingestion exception",
-      });
-    }
+    
+    await executePipelineIngestion(file, file.name, isPdf, isImage, isText);
   };
 
   const handleDrag = (e: React.DragEvent) => {
