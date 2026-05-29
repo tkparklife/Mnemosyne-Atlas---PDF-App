@@ -17,32 +17,6 @@ import {
 } from "lucide-react";
 import { PDFDocument, PDFPage, Highlight } from "../types";
 
-// Helper to convert data URL / Base64 to Blob
-function dataURLtoBlob(dataStr: string) {
-  try {
-    let base64 = dataStr;
-    let mime = "application/pdf";
-
-    if (dataStr.startsWith("data:")) {
-      const parts = dataStr.split(",");
-      mime = parts[0].match(/:(.*?);/)?.[1] || "application/pdf";
-      base64 = parts[1];
-    }
-
-    // Decode base64
-    const bstr = atob(base64);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new Blob([u8arr], { type: mime });
-  } catch (err) {
-    console.error("Failed to parse base64 file data string", err);
-    throw err;
-  }
-}
-
 // Helper hook to load PDF.js from CDN
 function usePdfJs() {
   const [pdfjs, setPdfjs] = useState<any>(null);

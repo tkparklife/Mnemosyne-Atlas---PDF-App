@@ -286,9 +286,9 @@ export default function LeftPanel({
         reader.onerror = (e) => reject(e);
       });
 
-      // Data URL correctly formats the binary data into a string that Node.js Buffer.from can parse
       reader.readAsDataURL(rawFileOrBlob);
-      const base64Data = await fileLoadedPromise;
+      const fullData = await fileLoadedPromise;
+      const base64Data = fullData.includes(',') ? fullData.split(',')[1] : fullData;
 
       // Stage steps for high fidelity feedback
       const steps = [
