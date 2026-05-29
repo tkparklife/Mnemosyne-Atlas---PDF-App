@@ -1,3 +1,11 @@
+
+declare global {
+  interface Window {
+    google: any;
+    gapi: any;
+  }
+}
+
 export interface PDFPage {
   pageNumber: number;
   rawText: string;

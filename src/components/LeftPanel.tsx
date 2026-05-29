@@ -1,5 +1,20 @@
-import React, { useState, useRef } from "react";
-import { FolderPlus, BookOpen, Trash2, UploadCloud, Tag, Layers, Search, Check, AlertCircle, RefreshCw, Plus, X, Star } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import {
+  FolderPlus,
+  BookOpen,
+  Trash2,
+  UploadCloud,
+  Tag,
+  Layers,
+  Search,
+  Check,
+  AlertCircle,
+  RefreshCw,
+  Plus,
+  X,
+  Star,
+  Cloud,
+} from "lucide-react";
 import { PDFDocument, Collection } from "../types";
 
 interface LeftPanelProps {
@@ -27,24 +42,153 @@ export default function LeftPanel({
   selectedCollectionId,
   onSelectCollection,
   onDeleteCollection,
-  onUpdateDocCollections
+  onUpdateDocCollections,
 }: LeftPanelProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadState, setUploadState] = useState<{
-    status: 'idle' | 'uploading' | 'error' | 'success';
+    status: "idle" | "uploading" | "error" | "success";
     filename?: string;
     step?: string;
     error?: string;
-  }>({ status: 'idle' });
+  }>({ status: "idle" });
 
   const [newColName, setNewColName] = useState("");
   const [newColDesc, setNewColDesc] = useState("");
   const [newColColor, setNewColColor] = useState("indigo");
   const [showColModal, setShowColModal] = useState(false);
   const [docColMenuId, setDocColMenuId] = useState<string | null>(null);
-  const [deletingCollectionId, setDeletingCollectionId] = useState<string | null>(null);
+  const [deletingCollectionId, setDeletingCollectionId] = useState<
+    string | null
+  >(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Google Drive Integration State
+  const [gapiLoaded, setGapiLoaded] = useState(false);
+  const [gisLoaded, setGisLoaded] = useState(false);
+  const [tokenClient, setTokenClient] = useState<any>(null);
+
+  useEffect(() => {
+    // Load GIS
+    const script1 = document.createElement("script");
+    script1.src = "https://accounts.google.com/gsi/client";
+    script1.async = true;
+    script1.defer = true;
+    script1.onload = () => {
+      try {
+        if (window.google?.accounts?.oauth2) {
+          const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+          if (clientId) {
+            const client = window.google.accounts.oauth2.initTokenClient({
+              client_id: clientId,
+              scope: "https://www.googleapis.com/auth/drive.readonly",
+              callback: (tokenResponse: any) => {
+                if (tokenResponse && tokenResponse.access_token) {
+                  createPicker(tokenResponse.access_token);
+                }
+              },
+            });
+            setTokenClient(client);
+            setGisLoaded(true);
+          } else {
+            console.warn(
+              "VITE_GOOGLE_CLIENT_ID is not set in environment variables. Google Drive import will be disabled.",
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Error initializing Google Identity Services:", err);
+      }
+    };
+    script1.onerror = () =>
+      console.error("Failed to load Google Identity Services script.");
+    document.body.appendChild(script1);
+
+    // Load GAPI
+    const script2 = document.createElement("script");
+    script2.src = "https://apis.google.com/js/api.js";
+    script2.async = true;
+    script2.defer = true;
+    script2.onload = () => {
+      try {
+        window.gapi.load("picker", { callback: () => setGapiLoaded(true) });
+      } catch (err) {
+        console.error("Error loading GAPI picker:", err);
+      }
+    };
+    script2.onerror = () => console.error("Failed to load GAPI script.");
+    document.body.appendChild(script2);
+  }, []);
+
+  const handleDriveImport = () => {
+    if (!gapiLoaded || !gisLoaded || !tokenClient) {
+      alert(
+        "Google Drive API is still loading. Please try again in a few seconds.",
+      );
+      return;
+    }
+
+    tokenClient.requestAccessToken();
+  };
+
+  const createPicker = (accessToken: string) => {
+    const view = new window.gapi.picker.DocsView(
+      window.gapi.picker.ViewId.DOCS,
+    );
+    view.setMimeTypes("application/pdf");
+
+    let builder = new window.gapi.picker.PickerBuilder()
+      .addView(view)
+      .setOAuthToken(accessToken)
+      .setCallback((data: any) => pickerCallback(data, accessToken));
+
+    if (import.meta.env.VITE_GOOGLE_API_KEY) {
+      builder = builder.setDeveloperKey(import.meta.env.VITE_GOOGLE_API_KEY);
+    }
+
+    const picker = builder.build();
+    picker.setVisible(true);
+  };
+
+  const pickerCallback = async (data: any, accessToken: string) => {
+    if (
+      data[window.gapi.picker.Response.ACTION] ===
+      window.gapi.picker.Action.PICKED
+    ) {
+      const doc = data[window.gapi.picker.Response.DOCUMENTS][0];
+      const fileId = doc[window.gapi.picker.Document.ID];
+      const fileName = doc[window.gapi.picker.Document.NAME];
+
+      setUploadState({
+        status: "uploading",
+        filename: fileName,
+        step: "Downloading from Google Drive...",
+      });
+
+      try {
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          },
+        );
+        if (!res.ok)
+          throw new Error("Failed to download file from Google Drive");
+
+        const blob = await res.blob();
+        const file = new File([blob], fileName, { type: "application/pdf" });
+        await processUpload(file);
+      } catch (err: any) {
+        console.error("Picker error:", err);
+        setUploadState({
+          status: "error",
+          error: err.message || "Google Drive file fetch failed.",
+        });
+      }
+    }
+  };
 
   // Styling maps for light theme glassmorphic design
   const colorMap: Record<string, string> = {
@@ -53,7 +197,7 @@ export default function LeftPanel({
     indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
     emerald: "bg-emerald-50 text-emerald-700 border-emerald-200",
     sky: "bg-sky-50 text-sky-700 border-sky-200",
-    violet: "bg-violet-50 text-violet-700 border-violet-200"
+    violet: "bg-violet-50 text-violet-700 border-violet-200",
   };
 
   const ringMap: Record<string, string> = {
@@ -62,7 +206,7 @@ export default function LeftPanel({
     indigo: "ring-indigo-400 text-indigo-800 border-indigo-300",
     emerald: "ring-emerald-400 text-emerald-800 border-emerald-300",
     sky: "ring-sky-400 text-sky-800 border-sky-300",
-    violet: "ring-violet-400 text-violet-800 border-violet-300"
+    violet: "ring-violet-400 text-violet-800 border-violet-300",
   };
 
   // Convert File to Base64 helper
@@ -70,9 +214,9 @@ export default function LeftPanel({
     if (!file) return;
 
     setUploadState({
-      status: 'uploading',
+      status: "uploading",
       filename: file.name,
-      step: "Reading file bytes..."
+      step: "Reading file bytes...",
     });
 
     const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
@@ -81,15 +225,16 @@ export default function LeftPanel({
 
     if (!isPdf && !isImage && !isText) {
       setUploadState({
-        status: 'error',
-        error: "Invalid format. Load standard PDFs, PNG/JPEG images, or TXT manuscripts."
+        status: "error",
+        error:
+          "Invalid format. Load standard PDFs, PNG/JPEG images, or TXT manuscripts.",
       });
       return;
     }
 
     try {
       const reader = new FileReader();
-      
+
       const fileLoadedPromise = new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = (e) => reject(e);
@@ -104,18 +249,20 @@ export default function LeftPanel({
         "Calling server-side Gemini 3.5 OCR scanner...",
         "Parsing rich structural layout & text segments...",
         "Generating philosophical summaries & entity terms...",
-        "Compiling cross-document search vectors..."
+        "Compiling cross-document search vectors...",
       ];
 
       let stepIdx = 0;
       const interval = setInterval(() => {
         if (stepIdx < steps.length - 1) {
           stepIdx++;
-          setUploadState(prev => ({ ...prev, step: steps[stepIdx] }));
+          setUploadState((prev) => ({ ...prev, step: steps[stepIdx] }));
         }
       }, 1500);
 
-      const mimeType = file.type || (isPdf ? "application/pdf" : isText ? "text/plain" : "image/png");
+      const mimeType =
+        file.type ||
+        (isPdf ? "application/pdf" : isText ? "text/plain" : "image/png");
       const sizeStr = (file.size / (1024 * 1024)).toFixed(2) + " MB";
 
       const res = await fetch("/api/documents/upload", {
@@ -126,9 +273,9 @@ export default function LeftPanel({
           fileData: base64Data,
           mimeType,
           fileSize: sizeStr,
-          fileType: isPdf ? 'pdf' : isImage ? 'image' : 'text',
-          collectionIds: selectedCollectionId ? [selectedCollectionId] : []
-        })
+          fileType: isPdf ? "pdf" : isImage ? "image" : "text",
+          collectionIds: selectedCollectionId ? [selectedCollectionId] : [],
+        }),
       });
 
       clearInterval(interval);
@@ -141,22 +288,21 @@ export default function LeftPanel({
       const parsedDoc: PDFDocument = await res.json();
 
       setUploadState({
-        status: 'success',
-        filename: file.name
+        status: "success",
+        filename: file.name,
       });
 
       onUploadComplete(parsedDoc);
 
       // Reset feedback status slowly
       setTimeout(() => {
-        setUploadState({ status: 'idle' });
+        setUploadState({ status: "idle" });
       }, 3000);
-
     } catch (e: any) {
       console.error("Upload failure:", e);
       setUploadState({
-        status: 'error',
-        error: e.message || "Unknown indexer ingestion exception"
+        status: "error",
+        error: e.message || "Unknown indexer ingestion exception",
       });
     }
   };
@@ -199,20 +345,25 @@ export default function LeftPanel({
 
   // Filter docs
   const filteredDocuments = selectedCollectionId
-    ? documents.filter(d => d.collections.includes(selectedCollectionId))
+    ? documents.filter((d) => d.collections.includes(selectedCollectionId))
     : documents;
 
   return (
-    <div className="w-80 border-r border-slate-200 flex flex-col h-full bg-slate-50 overflow-hidden text-slate-800" id="left-panel-root">
-      
+    <div
+      className="w-80 border-r border-slate-200 flex flex-col h-full bg-slate-50 overflow-hidden text-slate-800"
+      id="left-panel-root"
+    >
       {/* Brand & Stats */}
       <div className="p-4 bg-white border-b border-slate-200 shrink-0">
         <div className="flex items-center gap-2 mb-1">
           <BookOpen className="w-5 h-5 text-indigo-600" />
-          <h1 className="text-sm font-bold text-slate-900 tracking-tight">PDF Knowledge Library</h1>
+          <h1 className="text-sm font-bold text-slate-900 tracking-tight">
+            PDF Knowledge Library
+          </h1>
         </div>
         <p className="text-[11px] text-slate-500">
-          Library contains {documents.length} document{documents.length !== 1 && 's'} ({collections.length} collections)
+          Library contains {documents.length} document
+          {documents.length !== 1 && "s"} ({collections.length} collections)
         </p>
       </div>
 
@@ -225,8 +376,8 @@ export default function LeftPanel({
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
           className={`flex flex-col items-center justify-center p-4 border border-dashed rounded-lg cursor-pointer transition-colors ${
-            isDragOver 
-              ? "bg-indigo-50 border-indigo-400" 
+            isDragOver
+              ? "bg-indigo-50 border-indigo-400"
               : "bg-slate-50 border-slate-300 hover:bg-slate-100"
           }`}
         >
@@ -238,40 +389,66 @@ export default function LeftPanel({
             className="hidden"
           />
 
-          {uploadState.status === 'idle' && (
+          {uploadState.status === "idle" && (
             <>
               <UploadCloud className="w-6 h-6 text-slate-400 mb-1.5" />
-              <span className="text-xs font-semibold text-slate-700">Drag or Click to Upload</span>
-              <span className="text-[10px] text-slate-500 mt-1">PDF, TXT, or JPEG/PNG</span>
+              <span className="text-xs font-semibold text-slate-700">
+                Drag or Click to Upload
+              </span>
+              <span className="text-[10px] text-slate-500 mt-1">
+                PDF, TXT, or JPEG/PNG
+              </span>
             </>
           )}
 
-          {uploadState.status === 'uploading' && (
+          {uploadState.status === "uploading" && (
             <div className="flex flex-col items-center justify-center w-full text-center">
               <RefreshCw className="w-5 h-5 text-indigo-600 animate-spin mb-1.5" />
-              <span className="text-xs font-semibold text-indigo-700">Indexing Archive...</span>
+              <span className="text-xs font-semibold text-indigo-700">
+                Indexing Archive...
+              </span>
               <span className="text-[10px] text-slate-500 font-mono mt-1 w-full truncate px-2">
                 {uploadState.step}
               </span>
             </div>
           )}
 
-          {uploadState.status === 'success' && (
+          {uploadState.status === "success" && (
             <div className="flex flex-col items-center justify-center text-center">
               <Check className="w-5 h-5 text-emerald-600 mb-1.5 bg-emerald-50 rounded-full p-1 border border-emerald-200" />
-              <span className="text-xs font-semibold text-emerald-700">Successfully Indexed!</span>
-              <span className="text-[10px] text-slate-500 truncate w-full px-2 mt-1">{uploadState.filename}</span>
+              <span className="text-xs font-semibold text-emerald-700">
+                Successfully Indexed!
+              </span>
+              <span className="text-[10px] text-slate-500 truncate w-full px-2 mt-1">
+                {uploadState.filename}
+              </span>
             </div>
           )}
 
-          {uploadState.status === 'error' && (
+          {uploadState.status === "error" && (
             <div className="flex flex-col items-center justify-center text-center">
               <AlertCircle className="w-5 h-5 text-rose-500 mb-1.5" />
-              <span className="text-xs font-semibold text-rose-700">Pipeline Ingestion Failed</span>
-              <span className="text-[10px] text-rose-500 mt-1 px-1 line-clamp-2">{uploadState.error}</span>
+              <span className="text-xs font-semibold text-rose-700">
+                Pipeline Ingestion Failed
+              </span>
+              <span className="text-[10px] text-rose-500 mt-1 px-1 line-clamp-2">
+                {uploadState.error}
+              </span>
             </div>
           )}
         </div>
+
+        {/* Google Drive Import Button */}
+        <button
+          onClick={handleDriveImport}
+          disabled={!gapiLoaded || !gisLoaded}
+          className="mt-3 w-full flex items-center justify-center gap-2 py-2 px-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+        >
+          <Cloud className="w-4 h-4 text-slate-500" />
+          <span className="text-xs font-semibold text-slate-700">
+            Import from Google Drive
+          </span>
+        </button>
       </div>
 
       {/* Collections Section */}
@@ -303,10 +480,12 @@ export default function LeftPanel({
             All Docs
           </button>
 
-          {collections.map(col => {
+          {collections.map((col) => {
             const isSelected = selectedCollectionId === col.id;
             const isDeleting = deletingCollectionId === col.id;
-            const styleClass = colorMap[col.color] || "bg-indigo-50 text-indigo-700 border-indigo-200";
+            const styleClass =
+              colorMap[col.color] ||
+              "bg-indigo-50 text-indigo-700 border-indigo-200";
             return (
               <div
                 key={col.id}
@@ -323,7 +502,9 @@ export default function LeftPanel({
               >
                 <div className="flex items-center gap-1 min-w-0">
                   <Tag className="w-2.5 h-2.5 opacity-60 shrink-0" />
-                  <span className="truncate">{isDeleting ? "Delete?" : col.name}</span>
+                  <span className="truncate">
+                    {isDeleting ? "Delete?" : col.name}
+                  </span>
                 </div>
                 {isDeleting ? (
                   <div className="flex items-center gap-1 shrink-0">
@@ -366,7 +547,10 @@ export default function LeftPanel({
       </div>
 
       {/* Library Scrollable Document List */}
-      <div className="flex-1 overflow-y-auto p-3" id="library-documents-scroller">
+      <div
+        className="flex-1 overflow-y-auto p-3"
+        id="library-documents-scroller"
+      >
         <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wildest mb-2 px-1">
           {selectedCollectionId ? "Collection Items" : "All Library Archives"}
         </h3>
@@ -376,12 +560,14 @@ export default function LeftPanel({
             <Layers className="w-5 h-5 text-slate-400 mx-auto mb-1.5" />
             <p className="text-xs text-slate-800 font-semibold">No documents</p>
             <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
-              {selectedCollectionId ? "This collection is empty. Drag a file here to add it." : "Upload manuscripts or PDFs to begin deep research."}
+              {selectedCollectionId
+                ? "This collection is empty. Drag a file here to add it."
+                : "Upload manuscripts or PDFs to begin deep research."}
             </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredDocuments.map(doc => {
+            {filteredDocuments.map((doc) => {
               const isActive = selectedDocId === doc.id;
               return (
                 <div
@@ -395,17 +581,21 @@ export default function LeftPanel({
                 >
                   {/* Title & Actions */}
                   <div className="flex justify-between items-start gap-1 pr-12 relative">
-                    <h4 className={`text-xs font-semibold truncate leading-tight ${
-                      isActive ? "text-indigo-900" : "text-slate-800"
-                    }`}>
+                    <h4
+                      className={`text-xs font-semibold truncate leading-tight ${
+                        isActive ? "text-indigo-900" : "text-slate-800"
+                      }`}
+                    >
                       {doc.title}
                     </h4>
-                    
+
                     <div className="absolute -top-0.5 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDocColMenuId(docColMenuId === doc.id ? null : doc.id);
+                          setDocColMenuId(
+                            docColMenuId === doc.id ? null : doc.id,
+                          );
                         }}
                         className="text-slate-400 hover:text-indigo-600 focus:outline-none p-0.5 rounded cursor-pointer"
                         title="Manage collections"
@@ -426,13 +616,13 @@ export default function LeftPanel({
 
                     {/* Manage Collections Dropdown popover */}
                     {docColMenuId === doc.id && (
-                      <div 
+                      <div
                         className="absolute top-6 right-0 w-52 bg-white border border-slate-200 rounded-lg shadow-xl z-30 p-2 font-sans"
-                        onClick={e => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1 border-b border-slate-200 pb-1 flex justify-between items-center">
                           <span>Set Collections</span>
-                          <button 
+                          <button
                             onClick={() => setDocColMenuId(null)}
                             className="text-slate-400 hover:text-slate-700"
                           >
@@ -441,19 +631,26 @@ export default function LeftPanel({
                         </div>
                         <div className="space-y-0.5 max-h-32 overflow-y-auto mb-2 text-slate-700">
                           {collections.length === 0 && (
-                            <div className="text-[10px] text-slate-500 italic px-1 py-1">No collections available.</div>
+                            <div className="text-[10px] text-slate-500 italic px-1 py-1">
+                              No collections available.
+                            </div>
                           )}
-                          {collections.map(c => {
+                          {collections.map((c) => {
                             const inCol = doc.collections.includes(c.id);
                             return (
-                              <label key={c.id} className="flex items-center gap-2 w-full px-1.5 py-1 text-xs hover:bg-slate-100 rounded cursor-pointer transition-colors">
+                              <label
+                                key={c.id}
+                                className="flex items-center gap-2 w-full px-1.5 py-1 text-xs hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                              >
                                 <input
                                   type="checkbox"
                                   checked={inCol}
                                   onChange={() => {
                                     if (!onUpdateDocCollections) return;
-                                    const nextCols = inCol 
-                                      ? doc.collections.filter(cid => cid !== c.id) 
+                                    const nextCols = inCol
+                                      ? doc.collections.filter(
+                                          (cid) => cid !== c.id,
+                                        )
                                       : [...doc.collections, c.id];
                                     onUpdateDocCollections(doc.id, nextCols);
                                   }}
@@ -481,7 +678,8 @@ export default function LeftPanel({
 
                   {/* Description Context Line */}
                   <p className="text-[10px] text-slate-500 line-clamp-2 mt-1 leading-snug">
-                    {doc.description || "No localized document meta summary configured."}
+                    {doc.description ||
+                      "No localized document meta summary configured."}
                   </p>
 
                   {/* Metadata Indicators bar */}
@@ -490,7 +688,7 @@ export default function LeftPanel({
                       {doc.fileSize}
                     </span>
                     <span className="text-[9px] font-mono text-slate-600 bg-slate-100 border border-slate-200 px-1 py-0.5 rounded">
-                      {doc.totalPages} pg{doc.totalPages !== 1 && 's'}
+                      {doc.totalPages} pg{doc.totalPages !== 1 && "s"}
                     </span>
                     {doc.ocrApplied ? (
                       <span className="text-[8px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-200 flex items-center gap-0.5">
@@ -503,11 +701,14 @@ export default function LeftPanel({
                     )}
 
                     {/* Show Tag badges inside document item */}
-                    {doc.collections.map(colId => {
-                      const tag = collections.find(c => c.id === colId);
+                    {doc.collections.map((colId) => {
+                      const tag = collections.find((c) => c.id === colId);
                       if (!tag) return null;
                       return (
-                        <span key={colId} className={`text-[8px] px-1 rounded-sm border opacity-90 ${colorMap[tag.color] || "bg-slate-100"}`}>
+                        <span
+                          key={colId}
+                          className={`text-[8px] px-1 rounded-sm border opacity-90 ${colorMap[tag.color] || "bg-slate-100"}`}
+                        >
                           {tag.name}
                         </span>
                       );
@@ -571,20 +772,28 @@ export default function LeftPanel({
                   Theme Hue
                 </label>
                 <div className="flex items-center gap-2 mt-1 font-medium">
-                  {['rose', 'amber', 'indigo', 'emerald', 'sky', 'violet'].map(hue => (
-                    <button
-                      key={hue}
-                      type="button"
-                      onClick={() => setNewColColor(hue)}
-                      className={`w-6 h-6 rounded-full cursor-pointer transition-transform relative ${
-                        hue === 'rose' ? 'bg-rose-500' :
-                        hue === 'amber' ? 'bg-amber-500' :
-                        hue === 'indigo' ? 'bg-indigo-500' :
-                        hue === 'emerald' ? 'bg-emerald-500' :
-                        hue === 'sky' ? 'bg-sky-500' : 'bg-violet-500'
-                      } ${newColColor === hue ? 'scale-125 ring-2 ring-offset-2 ring-indigo-400 shadow-sm' : ''}`}
-                    />
-                  ))}
+                  {["rose", "amber", "indigo", "emerald", "sky", "violet"].map(
+                    (hue) => (
+                      <button
+                        key={hue}
+                        type="button"
+                        onClick={() => setNewColColor(hue)}
+                        className={`w-6 h-6 rounded-full cursor-pointer transition-transform relative ${
+                          hue === "rose"
+                            ? "bg-rose-500"
+                            : hue === "amber"
+                              ? "bg-amber-500"
+                              : hue === "indigo"
+                                ? "bg-indigo-500"
+                                : hue === "emerald"
+                                  ? "bg-emerald-500"
+                                  : hue === "sky"
+                                    ? "bg-sky-500"
+                                    : "bg-violet-500"
+                        } ${newColColor === hue ? "scale-125 ring-2 ring-offset-2 ring-indigo-400 shadow-sm" : ""}`}
+                      />
+                    ),
+                  )}
                 </div>
               </div>
 
@@ -607,7 +816,6 @@ export default function LeftPanel({
           </div>
         </div>
       )}
-
     </div>
   );
 }
