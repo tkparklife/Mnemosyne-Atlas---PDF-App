@@ -328,8 +328,15 @@ export default function LeftPanel({
       clearInterval(interval);
 
       if (!res.ok) {
-        const errJson = await res.json();
-        throw new Error(errJson.details || errJson.error || "Uploader error");
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+          const errJson = await res.json();
+          throw new Error(errJson.details || errJson.error || `Server Error: ${res.status}`);
+        } else {
+          // If Vercel returns an HTML/Text error page, grab the text and status
+          const errText = await res.text();
+          throw new Error(`Vercel Server Error (${res.status}): The backend timed out or rejected the payload. Raw response: ${errText.substring(0, 50)}...`);
+        }
       }
 
       const parsedDoc: PDFDocument = await res.json();
