@@ -1,0 +1,6 @@
+{
+  "name": "Mnemosyne Atlas",
+  "description": "A desktop-class PDF reader and knowledge management application with OCR, global index parsing, and instant highlight-triggered global cross-referencing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
