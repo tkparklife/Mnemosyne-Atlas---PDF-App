@@ -205,13 +205,10 @@ export default function LeftPanel({
   };
 
   const pickerCallback = async (data: any, accessToken: string) => {
-    if (
-      data[window.google.picker.Response.ACTION] ===
-      window.google.picker.Action.PICKED
-    ) {
-      const doc = data[window.google.picker.Response.DOCUMENTS][0];
-      const fileId = doc[window.google.picker.Document.ID];
-      const fileName = doc[window.google.picker.Document.NAME];
+    if (data.action === window.google.picker.Action.PICKED) {
+      const doc = data.docs[0];
+      const fileId = doc.id;
+      const fileName = doc.name;
 
       setUploadState({
         status: "uploading",
@@ -231,8 +228,9 @@ export default function LeftPanel({
         if (!res.ok)
           throw new Error("Failed to download file from Google Drive");
 
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
+        const rawBlob = await res.blob();
+        const pdfBlob = new Blob([rawBlob], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(pdfBlob);
 
         // Pass it directly to the local viewer as an object URL
         const driveDoc: PDFDocument = {
