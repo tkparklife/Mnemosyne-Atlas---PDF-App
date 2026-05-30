@@ -264,133 +264,35 @@ async function startServer() {
   // 2. Create/Upload a new Document (OCR & parsing)
   app.post("/api/documents/upload", async (req: Request, res: Response) => {
     try {
-      const { title, fileData, mimeType, fileSize, fileType, collectionIds } = req.body;
-
-      if (!fileData) {
-        return res.status(400).json({ error: "Missing fileData payload" });
-      }
-
-      const id = "doc-" + Date.now();
-      const uploadDate = new Date().toISOString().split('T')[0];
-
-      // Clean metadata and default structure
-      const newDoc: PDFDocument = {
-        id,
-        title: title || "Uploaded Document",
-        description: `Ingested through pipeline on ${uploadDate}`,
-        fileSize: fileSize || "Unknown size",
-        uploadDate,
-        pages: [],
-        collections: Array.isArray(collectionIds) ? collectionIds : [],
-        totalPages: 1,
-        ocrApplied: false,
-        fileType: fileType || 'pdf',
-        fileData: fileData
+      const uploadHandlerModule = await import("./api/documents/upload.ts");
+      const uploadHandler = uploadHandlerModule.default;
+      
+      // We will proxy the request through the new handler, but intercept the result so we can push it to local db
+      // We do this by mocking res.status & res.json
+      
+      const originalJson = res.json.bind(res);
+      const originalStatus = res.status.bind(res);
+      
+      let statusCode = 200;
+      
+      const mockRes = {
+        status: (code: number) => {
+          statusCode = code;
+          originalStatus(code);
+          return mockRes;
+        },
+        json: (data: any) => {
+          if (statusCode === 201 && data && data.id) {
+             db.documents.push(data); // Sync local memory DB
+          }
+          return originalJson(data);
+        }
       };
-
-      // Determine MIME Type category
-      const isPdfFile = fileType === 'pdf' || mimeType?.includes("pdf") || title?.toLowerCase().endsWith(".pdf");
-      const isOcrNeeded = mimeType?.includes("image") || fileType === 'image' || title?.toLowerCase().endsWith(".png") || title?.toLowerCase().endsWith(".jpeg");
-
-      if (isPdfFile) {
-        try {
-          console.log(`PDF Document detected ('${title}'). Starting high-accuracy direct pdf-parse extraction of all pages...`);
-          const base64Clean = fileData.includes(',') ? fileData.split(',')[1] : fileData;
-
-          const buffer = Buffer.from(base64Clean, 'base64');
-          
-          const parsedPages = await parsePDFWithPdfParse(buffer);
-          
-          if (parsedPages && parsedPages.length > 0) {
-            newDoc.pages = parsedPages;
-            newDoc.totalPages = parsedPages.length;
-            newDoc.ocrApplied = false;
-            newDoc.description = `Fully parsed and indexed all ${parsedPages.length} pages of the uploaded manuscript.`;
-          } else {
-            throw new Error("No pages parsed from the PDF document");
-          }
-        } catch (pdfErr: any) {
-          console.error("Direct PDF parsing failed, trying fallback:", pdfErr);
-          newDoc.pages = createFallbackPagesFromPayload(title, fileData);
-          newDoc.totalPages = newDoc.pages.length;
-        }
-      } else if (isOcrNeeded && ai) {
-        try {
-          console.log(`Instructing Gemini to extract text via OCR. Target file mimeType: ${mimeType || 'image/png'}`);
-          
-          const base64Clean = fileData.includes(',') ? fileData.split(',')[1] : fileData;
-
-          const promptText = `
-            You are a high-performance OCR, document processing, and philosophical knowledge extraction assistant.
-            Please extract the complete text content of this document page by page.
-            Analyze the text, format it cleanly, and represent the document structure.
-            Output your assessment ONLY as a raw, single JSON array matching this TypeScript structure:
-            
-            [
-              {
-                "pageNumber": number,
-                "rawText": "full clean extracted text of this specific page...",
-                "summary": "one-sentence summary of this page's academic or descriptive topic",
-                "keyTerms": ["list", "of", "important", "academic", "entities", "or", "terms", "on", "this", "page"]
-              }
-            ]
-            
-            Do NOT include markdown formatting wrappers like \`\`\`json or \`\`\`. Start your response with [ and end with ]. Ensure it parses as standard JSON.
-          `;
-
-          const response = await ai.models.generateContent({
-            model: "gemini-3.5-flash",
-            contents: [
-              {
-                inlineData: {
-                  data: base64Clean,
-                  mimeType: mimeType || "image/png"
-                }
-              },
-              promptText
-            ]
-          });
-
-          const rawTextResponse = response.text || "";
-          console.log("Raw response from Gemini OCR engine:", rawTextResponse.substring(0, 400));
-
-          // Parse JSON contents safely
-          let jsonClean = rawTextResponse.trim();
-          if (jsonClean.startsWith("```json")) {
-            jsonClean = jsonClean.replace(/^```json\s*/i, "").replace(/\s*```$/i, "");
-          } else if (jsonClean.startsWith("```")) {
-            jsonClean = jsonClean.replace(/^```\s*/, "").replace(/\s*```$/, "");
-          }
-
-          const parsedPages = JSON.parse(jsonClean);
-
-          if (Array.isArray(parsedPages) && parsedPages.length > 0) {
-            newDoc.pages = parsedPages;
-            newDoc.totalPages = parsedPages.length;
-            newDoc.ocrApplied = true;
-            newDoc.description = `Analyzed and fully indexed by Gemini 3.5. Contains ${newDoc.totalPages} page(s). Key terms extraction completed successfully.`;
-          } else {
-            throw new Error("Parsed pages format is not an array");
-          }
-
-        } catch (gemInIErr) {
-          console.error("Gemini OCR operation failed, initiating fallback parser:", gemInIErr);
-          newDoc.pages = createFallbackPagesFromPayload(title, fileData);
-          newDoc.totalPages = newDoc.pages.length;
-          newDoc.description = `Ingested with standard text indexing. [Note: Client side OCR fallback triggered]`;
-        }
-      } else {
-        console.warn("Standard raw text processing fallback triggered...");
-        newDoc.pages = createFallbackPagesFromPayload(title, fileData);
-        newDoc.totalPages = newDoc.pages.length;
-        newDoc.description = `Ingested with standard text indexing. (Connect Gemini API Key for fully automated OCR analysis)`;
-      }
-
-      db.documents.push(newDoc);
-      res.status(201).json(newDoc);
+      
+      await uploadHandler(req, mockRes);
     } catch (err: any) {
-      console.error("Critical upload error:", err);
-      res.status(500).json({ error: err?.message || "Server failed to process file upload", details: err?.message });
+      console.error("Express upload wrapper error:", err);
+      res.status(500).json({ error: "Server failed to process file upload wrapper", details: err?.message });
     }
   });
 
