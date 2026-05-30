@@ -142,6 +142,15 @@ function createFallbackPagesFromPayload(title: string, fileData: string): PDFPag
   return pages;
 }
 
+// Global Vercel serverless function config to bypass default payload limit
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '50mb',
+    },
+  },
+};
+
 // Global Vercel serverless function export
 export default async function handler(req: any, res: any) {
   // Support both Express and Vercel structures implicitly
