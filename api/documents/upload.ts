@@ -1,10 +1,8 @@
 import { Request, Response } from "express";
 import { GoogleGenAI } from "@google/genai";
 import { Buffer } from "buffer";
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-const pdfRaw = require("pdf-parse");
+import * as pdfRawModule from "pdf-parse";
+const pdfRaw: any = (pdfRawModule as any).default || pdfRawModule;
 
 export interface PDFPage {
   pageNumber: number;

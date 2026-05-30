@@ -2,10 +2,8 @@ import express, { Request, Response } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdfRaw = require("pdf-parse");
-const pdf = typeof pdfRaw === "function" ? pdfRaw : (pdfRaw && pdfRaw.default ? pdfRaw.default : pdfRaw);
+import * as pdfRawModule from "pdf-parse";
+const pdfRaw: any = (pdfRawModule as any).default || pdfRawModule;
 
 // Ensure we have access to process.env
 import dotenv from "dotenv";
