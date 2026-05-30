@@ -290,14 +290,21 @@ export default function App() {
           selectedCollectionId={selectedCollectionId}
           onSelectCollection={setSelectedCollectionId}
           onUpdateDocCollections={handleUpdateDocCollections}
-          onDeleteCollection={(id) => {
-            setCollections(prev => prev.filter(c => c.id !== id));
-            setDocuments(prev => prev.map(doc => ({
-              ...doc,
-              collections: doc.collections ? doc.collections.filter(cid => cid !== id) : []
-            })));
-            if (selectedCollectionId === id) {
-              setSelectedCollectionId(null);
+          onDeleteCollection={async (id) => {
+            try {
+              const res = await fetch(`/api/collections/${id}`, { method: "DELETE" });
+              if (res.ok) {
+                setCollections(prev => prev.filter(c => c.id !== id));
+                setDocuments(prev => prev.map(doc => ({
+                  ...doc,
+                  collections: doc.collections ? doc.collections.filter(cid => cid !== id) : []
+                })));
+                if (selectedCollectionId === id) {
+                  setSelectedCollectionId(null);
+                }
+              }
+            } catch (e) {
+              console.error("Failed to delete collection:", e);
             }
           }}
         />

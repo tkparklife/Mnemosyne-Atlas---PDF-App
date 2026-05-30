@@ -1,0 +1,181 @@
+{
+  "collections": [
+    {
+      "id": "col-semiotics",
+      "name": "Semiotics & Lingustics",
+      "description": "Texts detailing sign systems, semantic fields, and structural linguistics.",
+      "color": "rose"
+    },
+    {
+      "id": "col-archives",
+      "name": "Historical Methodology",
+      "description": "Archives, historiographical analysis, and empirical frameworks.",
+      "color": "amber"
+    },
+    {
+      "id": "col-philosophy",
+      "name": "Symbolic Philosophy",
+      "description": "Symbolic architectures and intellectual structuralism.",
+      "color": "indigo"
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc-semiotics-history",
+      "title": "The Semiotics of History: Sign Systems in Archive Coding",
+      "description": "A foundational text investigating how historical facts are structured as symbolic signs, utilizing theories from De Saussure and Peirce to reconstruct historical consciousness.",
+      "fileSize": "1.4 MB",
+      "uploadDate": "2026-05-28",
+      "totalPages": 4,
+      "ocrApplied": true,
+      "fileType": "pdf",
+      "collections": [
+        "col-semiotics",
+        "col-archives"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "rawText": "The semiotics of history begins at the intersection of textuality and chronological records. To construct a historical system, one does not merely list sequence events; one decodes signs. According to Ferdinand de Saussure, a sign is composed of a signifier and a signified. In archival structures, the document remains a latent signifier waiting for structural semiotics to elicit its final meaning. Consequently, primary sources represent a network of shifting symbols that historians must carefully index to build out their systemic representations of human history.",
+          "summary": "Introduction to historical semiotics and sign-decoding in archives.",
+          "keyTerms": [
+            "semiotics",
+            "signified",
+            "signifier",
+            "Ferdinand de Saussure",
+            "symbolic systems"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "rawText": "While Saussure advocated a dyadic model, Charles Sanders Peirce formulated a triadic system of semiotics: the representamen, the object, and the interpretant. This Peirce-style historicism holds that signs develop dynamically. A 17th-century administrative log does not merely refer to transactions, but interprets previous socio-economic relations. Thus, when researching historical semiotics, Peirce provides the logical tools to analyze how meaning propagates over time and within different cultures.",
+          "summary": "Contrasting Saussure and Charles Sanders Peirce’s semiotic models in historicism.",
+          "keyTerms": [
+            "Charles Sanders Peirce",
+            "semiotics",
+            "interpretant",
+            "triadic model",
+            "historical signs"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "rawText": "Through structural linguistics, we see historical events as signs within a larger narrative. For instance, the transition of currency from gold coins to electronic ledger balances is a semiotic shift. This semiotic transformation creates a new historical epoch, governed by structural codes rather than physical assets. Scholars in historiography must catalog these linguistic shifts to capture the true structural depth of administrative changes.",
+          "summary": "Analyzing economic transitions as semiotic shifts in narrative empires.",
+          "keyTerms": [
+            "semiotics",
+            "linguistics",
+            "narrative structures",
+            "structuralism",
+            "historiography"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "rawText": "Ultimately, the semiological analysis of historical periods reveals that history is a dynamic, multi-layered library. By tracking repeating occurrences of concepts like 'sovereignty' or 'semiotics' across unrelated letters, public laws, and theological treatises, we can map the latent paradigm of an era. The goal of this PDF database is to enable exactly this type of comprehensive cross-referencing and deep archive lookup.",
+          "summary": "Concluding thoughts on mapping paradigms using cross-referencing indices.",
+          "keyTerms": [
+            "semiotics",
+            "cross-referencing",
+            "sovereignty",
+            "archival database",
+            "linguistics"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "doc-historiography-empires",
+      "title": "Historiography of Empire: Narrative, Symbols, and Structural Cycles",
+      "description": "An examination of cyclical imperial power. Focuses on the physical and symbolic representations used by successive Roman and colonial empires to enforce political authority.",
+      "fileSize": "2.8 MB",
+      "uploadDate": "2026-05-29",
+      "totalPages": 3,
+      "ocrApplied": false,
+      "fileType": "pdf",
+      "collections": [
+        "col-archives",
+        "col-philosophy"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "rawText": "Historiographical debates often center on the driving forces behind imperial lifecycle stages. Gibbon's decline and fall hypothesis traces spiritual decay, while modern structural theory notes ecological margins. What both schools ignore is the sovereign symbolization system. Empires do not rule merely through armies; they conquer with signs. The Roman eagle, the colonial stamp, and the corporate logo represent semiotic networks of power that establish long-term political authority.",
+          "summary": "Analyzing historical theories of imperial cyles and sovereign symbolization.",
+          "keyTerms": [
+            "historiography",
+            "sovereignty",
+            "symbolic networks",
+            "Roman Empire",
+            "Edward Gibbon",
+            "semiotics"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "rawText": "In Roman Empire studies, the coin represents the ultimate semiological instrument. Stamped with the emperor's likeness, the silver denarius served as an indexical sign of state presence in remote provinces. Consequently, monetary transactions were daily confirmations of loyalty and authority. When localized tribes transacted, they engaged in a semiotic ritual that reinforced the empire's overarching narrative framework.",
+          "summary": "The Roman denarius as a semiological and indexical sign of political authority.",
+          "keyTerms": [
+            "Roman Empire",
+            "semiotics",
+            "loyalty",
+            "narrative structures",
+            "semiology"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "rawText": "When historians compile these imperial artifacts, cross-referencing becomes vital. By cross-referencing monetary records against remote archeological inscriptions, we uncover systemic leaks. The sign of the emperor is gradually replaced by local marks, indicating a breakdown in the structural semiological cycle. This deterioration precedes the physical collapse of provincial garrisons by several decades.",
+          "summary": "Predicting imperial breakdown through cross-referencing semiotic changes.",
+          "keyTerms": [
+            "cross-referencing",
+            "semiology",
+            "structural cycles",
+            "historiography"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "doc-symbolic-rituals",
+      "title": "Linguistic Rituals and Symbolic Anthropological Structures",
+      "description": "An anthropological study of repetitive rituals as semiological structures of communication, contrasting Levi-Strauss' structuralism against postmodern semiotic critiques.",
+      "fileSize": "950 KB",
+      "uploadDate": "2026-05-25",
+      "totalPages": 2,
+      "ocrApplied": true,
+      "fileType": "text",
+      "collections": [
+        "col-semiotics",
+        "col-philosophy"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "rawText": "Anthropology and structural linguistics merged in the mid-20th century to create symbolic anthropology. Claude Lévi-Strauss proposed that myths are structured like languages, organized into binary oppositions. Within this structural framework, cultural rituals are communicative enactments: their components are symbols in an elaborate linguistic system. To understand a sacred dance, one must decode its structural grammar, viewing every gesture as a signifier.",
+          "summary": "Claude Lévi-Strauss and binary structures in cultural myths and rituals.",
+          "keyTerms": [
+            "Claude Lévi-Strauss",
+            "symbols",
+            "linguistics",
+            "structuralism",
+            "rituals",
+            "signifier"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "rawText": "POSTMODERN CRITIQUE OF STRUCTURALISM: Scholars like Derrida argued that binary setups lock in false assumptions. Instead of closed structures, they propose open-ended semiotics where meaning is constantly deferred. There is no ultimate referent; every sign points only to other signs. Under this postmodern view, our historical records are infinite networks of signs where concepts like 'semiotics' or 'structural systems' are in constant play, offering infinite paths for deep cross-referencing.",
+          "summary": "Postmodern semiotics and the open-ended deferral of historical signs.",
+          "keyTerms": [
+            "semiotics",
+            "postmodernism",
+            "Jacques Derrida",
+            "structuralism",
+            "cross-referencing"
+          ]
+        }
+      ]
+    }
+  ]
+}

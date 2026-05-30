@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import * as pdfRawModule from "pdf-parse";
@@ -39,14 +40,48 @@ interface Collection {
   color: string;
 }
 
-// In-Memory Database for preview persistence
+// Persistent Database for preview
+const dbPath = path.join(process.cwd(), "data", "db.json");
+
 class KnowledgeDatabase {
   documents: PDFDocument[] = [];
   collections: Collection[] = [];
 
   constructor() {
+    this.loadData();
+  }
+
+  private loadData() {
+    if (fs.existsSync(dbPath)) {
+      try {
+        const raw = fs.readFileSync(dbPath, "utf-8");
+        const data = JSON.parse(raw);
+        if (data.collections && Array.isArray(data.collections)) this.collections = data.collections;
+        if (data.documents && Array.isArray(data.documents)) this.documents = data.documents;
+        return;
+      } catch (err) {
+        console.error("Failed to parse db.json, falling back to default seed data", err);
+      }
+    }
+
     this.seedDefaultCollections();
     this.seedDefaultDocuments();
+    this.saveData();
+  }
+
+  public saveData() {
+    try {
+      const dir = path.dirname(dbPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(dbPath, JSON.stringify({
+        collections: this.collections,
+        documents: this.documents
+      }, null, 2), "utf-8");
+    } catch (err) {
+      console.error("Failed to save to db.json", err);
+    }
   }
 
   private seedDefaultCollections() {
@@ -377,6 +412,7 @@ async function startServer() {
       }
 
       db.documents.push(newDoc);
+      db.saveData();
       res.status(201).json(newDoc);
     } catch (err: any) {
       console.error("Express upload wrapper error:", err);
@@ -436,6 +472,7 @@ async function startServer() {
     const index = db.documents.findIndex(d => d.id === id);
     if (index !== -1) {
       db.documents.splice(index, 1);
+      db.saveData();
       return res.json({ success: true, message: "Document removed successfully" });
     }
     res.status(404).json({ error: "Document not found" });
@@ -468,7 +505,25 @@ async function startServer() {
     };
 
     db.collections.push(newCol);
+    db.saveData();
     res.status(201).json(newCol);
+  });
+
+  // 5b. Delete a Collection
+  app.delete("/api/collections/:id", (req: Request, res: Response) => {
+    const { id } = req.params;
+    const index = db.collections.findIndex(c => c.id === id);
+    if (index !== -1) {
+      db.collections.splice(index, 1);
+      db.documents.forEach(doc => {
+         if (doc.collections) {
+            doc.collections = doc.collections.filter(cId => cId !== id);
+         }
+      });
+      db.saveData();
+      return res.json({ success: true, message: "Collection removed successfully" });
+    }
+    res.status(404).json({ error: "Collection not found" });
   });
 
   // 6. Bind collections list to a specific document ID
@@ -486,6 +541,7 @@ async function startServer() {
     }
 
     doc.collections = collectionIds;
+    db.saveData();
     res.json(doc);
   });
 
